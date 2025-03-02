@@ -2,7 +2,7 @@
 
 An interactive tool for visualizing astrophysical data with Chi-squared weighted histograms and searchable star ID functionality.
 
-![example-visualization](example.png)
+
 
 
 ## Overview
@@ -41,7 +41,7 @@ pip install -r requirements.txt
 Clone this repository:
 
 ```bash
-git clone https://github.com/yourusername/star-histogram-analyzer.git
+git clone https://github.com/ChristosHussein/star-histogram-analyzer.git
 cd star-histogram-analyzer
 ```
 
