@@ -82,7 +82,9 @@ python main.py my_stars.xlsx --id-column StarID --chi2-column ChiSquared --param
    - Chi-squared value
    - Percentile position in the distribution
 
-## Data Format
+## Data Format 
+Object_ID	          RA_deg	          DEC_deg	          Av	    D_pc	  Teff_K  logg	Chi2	      Lbol_Lsun
+2056435602670418688	306.604843860052	35.32039589761002	2,73794	1705,2	3500	  0,5	  6001,208956	117,5143635
 
 The tool expects an Excel file (.xlsx) with at least:
 - A column for star IDs
