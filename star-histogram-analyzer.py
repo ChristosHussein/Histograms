@@ -1,316 +1,326 @@
-"""
-Star Histogram Analyzer
-
-An interactive tool for visualizing astrophysical data with Chi-squared weighted histograms
-and searchable star ID functionality.
-
-Usage:
-    python main.py path/to/your/data.xlsx
-"""
+# main_script.py
 
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.colors as mcolors
-from matplotlib.widgets import TextBox
-import matplotlib.patches as patches
-import argparse
-import os
-import sys
+import ipywidgets as widgets
+from IPython.display import display, clear_output
 
-class StarHistogramAnalyzer:
+def load_dataset(file_path, id_column='Object_ID', chi2_column='Chi2'):
     """
-    A class for creating interactive histograms of star properties with chi-squared weighting
-    and star ID search capabilities.
+    Load the dataset from an Excel file and clean the Object_ID column.
+
+    Parameters:
+    file_path: Path to the Excel file
+    id_column: Name of the column containing star IDs (default 'Object_ID')
+    chi2_column: Name of the column containing Chi2 values (default 'Chi2')
+
+    Returns:
+    A cleaned DataFrame or None if loading fails
     """
-    
-    def __init__(self, data_path, id_column='ID', chi2_column='Chi2'):
-        """
-        Initialize the analyzer with data.
+    try:
+        df = pd.read_excel(file_path)  # Load the Excel file
         
-        Parameters:
-        -----------
-        data_path : str
-            Path to the Excel file containing star data
-        id_column : str
-            Name of the column containing star IDs
-        chi2_column : str
-            Name of the column containing chi-squared values
-        """
-        self.id_column = id_column
-        self.chi2_column = chi2_column
-        self.load_data(data_path)
-        self.figures = []
-    
-    def load_data(self, data_path):
-        """
-        Load data from Excel file.
+        # Clean the ID column: Convert to string to handle large integers precisely
+        if id_column in df.columns:
+            df[id_column] = df[id_column].astype(str)
         
-        Parameters:
-        -----------
-        data_path : str
-            Path to the Excel file
-        """
+        print("File loaded successfully.")
+        return df
+    except FileNotFoundError:
+        print("Error: File not found. Please check the file path and name.")
+        return None
+    except Exception as e:
+        print(f"An error occurred while loading the file: {e}")
+        return None
+
+def find_star_by_id(df, object_id, id_column='Object_ID'):
+    """
+    Find a star in the dataset by its Object_ID (string-based matching).
+
+    Parameters:
+    df: The DataFrame containing the dataset
+    object_id: The ID of the star to find (as a string)
+    id_column: The column containing the star IDs (default 'Object_ID')
+
+    Returns:
+    A DataFrame row containing the star data, or None if not found
+    """
+    if id_column not in df.columns:
+        print(f"Error: Column '{id_column}' not found in the dataset.")
+        return None
+    
+    # Filter the dataset for the exact match of the Object_ID (string comparison)
+    matches = df[df[id_column] == str(object_id)]  # Ensure both sides are strings
+    
+    if len(matches) == 0:
+        print(f"No stars found with Object_ID '{object_id}'.")
+        return None
+    elif len(matches) > 1:
+        print(f"Multiple stars found with Object_ID '{object_id}'. Using the first match.")
+    
+    return matches.iloc[0]
+
+def filter_stars_by_query(df, query):
+    """
+    Filter stars based on a query (e.g., 'logg=5', 'logg>3', 'Teff_K<6000') and export matching Object_IDs to a text file.
+
+    Parameters:
+    df: The DataFrame containing the dataset
+    query: A string query (e.g., 'logg=5', 'logg>3', 'Teff_K<6000')
+    """
+    try:
+        # Strip whitespace from the query
+        query = query.strip()
+        
+        # Return None if the query is empty
+        if not query:
+            print("Please enter a valid query.")
+            return
+        
+        # Parse the query into column, operator, and value
+        if '=' in query:
+            column, value = query.split('=')
+            operator = '=='
+        elif '>' in query:
+            column, value = query.split('>')
+            operator = '>'
+        elif '<' in query:
+            column, value = query.split('<')
+            operator = '<'
+        else:
+            print(f"Error: Invalid query format. Use 'column=5', 'column>5', or 'column<5'.")
+            return
+        
+        # Ensure the column exists
+        if column.strip() not in df.columns:
+            print(f"Error: Column '{column.strip()}' not found in the dataset.")
+            return
+        
+        # Convert value to numeric if possible
         try:
-            self.df = pd.read_excel(data_path)
-            print(f"Successfully loaded data with {len(self.df)} entries.")
-            print(f"Available columns: {', '.join(self.df.columns)}")
-        except Exception as e:
-            print(f"Error loading data: {str(e)}")
-            sys.exit(1)
+            value = float(value.strip())
+        except ValueError:
+            print(f"Error: Invalid value '{value}' in query.")
+            return
+        
+        # Apply the query
+        if operator == '==':
+            matches = df[df[column.strip()] == value]
+        elif operator == '>':
+            matches = df[df[column.strip()] > value]
+        elif operator == '<':
+            matches = df[df[column.strip()] < value]
+        else:
+            print(f"Error: Unsupported operator '{operator}'.")
+            return
+        
+        if len(matches) == 0:
+            print(f"No stars found matching the query '{query}'.")
+            return
+        
+        # Export matching Object_IDs to a text file
+        output_filename = f"stars_{query.replace('>', '_gt_').replace('<', '_lt_').replace('=', '_eq_')}.txt"
+        with open(output_filename, "w") as f:
+            f.write(f"List of stars with {query}\n")
+            for obj_id in matches.get('Object_ID', []):
+                f.write(f"{obj_id}\n")
+        
+        print(f"Exported list of stars matching the query '{query}' to {output_filename}.")
+    except Exception as e:
+        print(f"Error: Invalid query format. Use 'column=5', 'column>5', or 'column<5'.")
+        print(e)
+
+def create_chi2_weighted_histogram(df, param_name, chi2_name='Chi2', bins=20, object_id=None, id_column='Object_ID'):
+    """
+    Create a histogram with chi2-based coloring and optional star highlighting.
+
+    Parameters:
+    df: The DataFrame containing the dataset
+    param_name: The parameter to plot (e.g., 'logg', 'Teff_K')
+    chi2_name: The column with Chi2 values (default 'Chi2')
+    bins: Number of bins for the histogram (default 20)
+    object_id: Optional Object_ID to highlight in the histogram
+    id_column: The column containing the star IDs (default 'Object_ID')
+    """
+    if param_name not in df.columns or chi2_name not in df.columns:
+        print(f"Error: Columns '{param_name}' or '{chi2_name}' not found in the dataset.")
+        return
     
-    def create_interactive_histogram(self, param_name, bins=20):
-        """
-        Create an interactive histogram with search functionality.
-        
-        Parameters:
-        -----------
-        param_name : str
-            The column name in the dataframe for the parameter to plot
-        bins : int
-            Number of bins for the histogram
-            
-        Returns:
-        --------
-        fig, ax : The figure and axis objects
-        """
-        # Extract the relevant columns
-        param_values = self.df[param_name]
-        chi2_values = self.df[self.chi2_column]
-        
-        # Create a figure and axis explicitly
-        fig, ax = plt.subplots(figsize=(12, 7))
-        
-        # Create bins for the histogram
-        bin_edges = np.linspace(min(param_values), max(param_values), bins+1)
-        hist, _ = np.histogram(param_values, bins=bin_edges)
-        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-        
-        # Calculate average chi2 for each bin
-        chi2_per_bin = []
-        for i in range(len(bin_edges) - 1):
-            # Find values in this bin
-            mask = (param_values >= bin_edges[i]) & (param_values < bin_edges[i+1])
-            # Calculate average chi2 for this bin
-            if np.sum(mask) > 0:
-                chi2_per_bin.append(np.mean(chi2_values[mask]))
-            else:
-                chi2_per_bin.append(0)
-        
-        # Normalize chi2 values for color mapping
-        min_chi2 = min(chi2_per_bin) if chi2_per_bin else 0
-        max_chi2 = max(chi2_per_bin) if chi2_per_bin else 1
-        
-        # Create a high-contrast colormap (dark blue to dark red)
-        colors = ["darkblue", "royalblue", "lightblue", "lightyellow", "orange", "red", "darkred"]
-        cmap = mcolors.LinearSegmentedColormap.from_list('high_contrast', colors)
-        
-        # Plot the histogram with colors based on chi2 values
-        for i in range(len(bin_centers)):
-            # Normalize the chi2 value
-            norm_value = (chi2_per_bin[i] - min_chi2) / (max_chi2 - min_chi2) if max_chi2 > min_chi2 else 0.5
-            ax.bar(bin_centers[i], hist[i], width=(bin_edges[1]-bin_edges[0]), 
-                   color=cmap(norm_value), alpha=0.8, 
-                   edgecolor='black', linewidth=0.5)
-        
-        # Add a colorbar
-        norm = mcolors.Normalize(min_chi2, max_chi2)
-        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-        sm.set_array([])
-        cbar = fig.colorbar(sm, ax=ax, label=f'{self.chi2_column} Value')
-        
-        # Add labels and title
-        ax.set_xlabel(param_name)
-        ax.set_ylabel('Frequency')
-        ax.set_title(f'Histogram of {param_name} values colored by {self.chi2_column}')
-        ax.grid(alpha=0.3)
-        
-        # Calculate and display statistics
-        mean_param = np.mean(param_values)
-        median_param = np.median(param_values)
-        std_param = np.std(param_values)
-        min_param = np.min(param_values)
-        max_param = np.max(param_values)
-        
-        mean_chi2 = np.mean(chi2_values)
-        median_chi2 = np.median(chi2_values)
-        min_chi2 = np.min(chi2_values)
-        max_chi2 = np.max(chi2_values)
-        
-        # Create statistics text
-        stats_text = (
-            f"{param_name} Statistics:\n"
-            f"Mean: {mean_param:.4g}\n"
-            f"Median: {median_param:.4g}\n"
-            f"Min: {min_param:.4g}\n"
-            f"Max: {max_param:.4g}\n"
-            f"Std Dev: {std_param:.4g}\n\n"
-            f"{self.chi2_column} Statistics:\n"
-            f"Mean: {mean_chi2:.4g}\n"
-            f"Median: {median_chi2:.4g}\n"
-            f"Min: {min_chi2:.4g}\n"
-            f"Max: {max_chi2:.4g}"
+    # Extract the relevant columns
+    param_values = df[param_name]
+    chi2_values = df[chi2_name]
+    
+    # Create a figure and axis explicitly
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    # Create bins for the histogram
+    bin_edges = np.linspace(min(param_values), max(param_values), bins + 1)
+    hist, _ = np.histogram(param_values, bins=bin_edges)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    
+    # Calculate average chi2 for each bin
+    chi2_per_bin = []
+    for i in range(len(bin_edges) - 1):
+        mask = (param_values >= bin_edges[i]) & (param_values < bin_edges[i+1])
+        chi2_per_bin.append(np.mean(chi2_values[mask]) if np.sum(mask) > 0 else 0)
+    
+    # Normalize chi2 values for color mapping
+    min_chi2 = min(chi2_per_bin)
+    max_chi2 = max(chi2_per_bin)
+    
+    # Create a high-contrast colormap
+    colors = ["darkblue", "royalblue", "lightblue", "lightyellow", "orange", "red", "darkred"]
+    cmap = mcolors.LinearSegmentedColormap.from_list('high_contrast', colors)
+    
+    # Plot the histogram with colors based on chi2 values
+    for i in range(len(bin_centers)):
+        norm_value = (chi2_per_bin[i] - min_chi2) / (max_chi2 - min_chi2) if max_chi2 > min_chi2 else 0.5
+        ax.bar(
+            bin_centers[i], hist[i], width=(bin_edges[1]-bin_edges[0]), 
+            color=cmap(norm_value), alpha=0.8, edgecolor='black', linewidth=0.5
         )
-        
-        # Add statistics textbox
-        plt.figtext(0.02, 0.02, stats_text, fontsize=9,
-                    bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.5'))
-        
-        # Create a text box for searching star IDs
-        axbox = plt.axes([0.15, 0.9, 0.3, 0.05])
-        text_box = TextBox(axbox, 'Search Star ID:', initial="")
-        
-        # Create a placeholder for star info
-        star_info_text = plt.figtext(0.5, 0.9, "", fontsize=10,
-                              bbox=dict(facecolor='lightyellow', alpha=0.9, boxstyle='round,pad=0.5'))
-        
-        # Store references for search elements
-        search_marker = None
-        search_highlight = None
-        
-        # Create the search function
-        def search(text):
-            nonlocal search_marker, search_highlight
+    
+    # Highlight the entire bin if an Object_ID is provided
+    if object_id is not None:
+        star_data = find_star_by_id(df, str(object_id), id_column=id_column)
+        if star_data is not None:
+            star_param_value = star_data[param_name]
             
-            # Clear previous marker and highlight if they exist
-            if search_marker:
-                search_marker.remove()
-                search_marker = None
-            if search_highlight:
-                search_highlight.remove()
-                search_highlight = None
-            
-            # Search for the star ID in the dataframe
-            try:
-                # Convert input to the same type as in your dataframe
-                search_id = text.strip()
-                
-                # Find the star in the dataframe
-                star_found = self.df[self.df[self.id_column].astype(str) == search_id]
-                
-                if not star_found.empty:
-                    star_row = star_found.iloc[0]
-                    param_value = star_row[param_name]
-                    chi2_value = star_row[self.chi2_column]
-                    
-                    # Find which bin it belongs to
-                    bin_idx = np.digitize(param_value, bin_edges) - 1
-                    if bin_idx >= len(bin_centers) or bin_idx < 0:
-                        bin_idx = min(max(0, bin_idx), len(bin_centers) - 1)
-                    
-                    # Get bin height for marker placement
-                    bin_height = hist[bin_idx]
-                    
-                    # Add marker at star's position
-                    search_marker = ax.scatter(param_value, bin_height * 1.05, 
-                                              color='black', marker='v', s=150, zorder=5)
-                    
-                    # Highlight the bin containing the star
-                    bin_left = bin_edges[bin_idx]
-                    bin_right = bin_edges[bin_idx + 1] if bin_idx < len(bin_edges) - 1 else bin_edges[bin_idx]
-                    bin_width = bin_right - bin_left
-                    
-                    # Create a transparent rectangle to highlight the bin
-                    search_highlight = ax.add_patch(
-                        patches.Rectangle((bin_left, 0), bin_width, bin_height,
-                                          facecolor='yellow', alpha=0.3, edgecolor='black', 
-                                          linestyle='--', linewidth=2, zorder=4)
+            # Highlight the bin containing the star
+            for i in range(len(bin_edges) - 1):
+                if bin_edges[i] <= star_param_value < bin_edges[i+1]:
+                    ax.bar(
+                        bin_centers[i], hist[i], width=(bin_edges[1]-bin_edges[0]), 
+                        color='red', alpha=0.7, edgecolor='black', linewidth=1.5, hatch='/',
+                        label=f"Star Bin ({object_id})"
                     )
                     
-                    # Calculate percentile of the star within the distribution
-                    percentile = (self.df[param_name] <= param_value).mean() * 100
+                    # Add a dashed vertical line connecting the bin to the legend
+                    ax.axvline(x=bin_centers[i], color='black', linestyle='--', linewidth=1.5, alpha=0.7, label="Star Position")
                     
-                    # Update star info text
+                    # Add star info to the legend
                     star_info = (
-                        f"Star ID: {search_id}\n"
-                        f"{param_name}: {param_value:.4g}\n"
-                        f"{self.chi2_column}: {chi2_value:.4g}\n"
-                        f"Percentile: {percentile:.1f}%"
+                        f"Star: {object_id}\n"
+                        f"{param_name}: {star_param_value:.4g}"
                     )
-                    star_info_text.set_text(star_info)
-                    star_info_text.set_bbox(dict(facecolor='lightyellow', alpha=0.9, boxstyle='round,pad=0.5'))
-                else:
-                    star_info_text.set_text(f"Star ID '{search_id}' not found")
-                    star_info_text.set_bbox(dict(facecolor='lightpink', alpha=0.9, boxstyle='round,pad=0.5'))
                     
-            except Exception as e:
-                star_info_text.set_text(f"Error: {str(e)}")
-                star_info_text.set_bbox(dict(facecolor='lightpink', alpha=0.9, boxstyle='round,pad=0.5'))
-            
-            # Redraw the figure
-            fig.canvas.draw_idle()
-        
-        # Connect the search function to the text box
-        text_box.on_submit(search)
-        
-        # Adjust layout
-        plt.tight_layout()
-        # Increase the top margin for the search box
-        plt.subplots_adjust(top=0.85, bottom=0.25)
-        
-        # Print some statistics to console as well
-        print(f"{param_name} range: {min_param:.4g} to {max_param:.4g}")
-        print(f"{self.chi2_column} range: {min_chi2:.4g} to {max_chi2:.4g}")
-        
-        # Return the figure and axis for potential further customization
-        return fig, ax
+                    # Place the legend at the bottom with only star info
+                    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), fontsize=10, frameon=True, shadow=True, title=star_info)
+                    break
     
-    def visualize_parameters(self, parameters, bins=20):
-        """
-        Create interactive histograms for specified parameters.
-        
-        Parameters:
-        -----------
-        parameters : list
-            List of column names to create histograms for
-        bins : int
-            Number of bins for the histograms
-        """
-        # Make sure plots are interactive
-        plt.ion()
-        
-        print(f"Creating {len(parameters)} interactive histograms...")
-        
-        # Create each histogram in turn
-        for param in parameters:
-            if param in self.df.columns:
-                print(f"\nCreating {param} histogram...")
-                fig, ax = self.create_interactive_histogram(param, bins=bins)
-                self.figures.append(fig)
-            else:
-                print(f"Warning: Column '{param}' not found in data.")
-        
-        print("\nAll interactive histograms created.")
-        print("Search for stars by entering their IDs in the search boxes.")
-        
-        # Block to keep figures alive
-        plt.show(block=True)
+    # Add a colorbar
+    norm = mcolors.Normalize(min_chi2, max_chi2)
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=ax, label=f'{chi2_name} Value')
+    
+    # Add labels and title
+    ax.set_xlabel(param_name)
+    ax.set_ylabel('Frequency')
+    ax.set_title(f'Histogram of {param_name} values colored by {chi2_name}')
+    ax.grid(alpha=0.3)
+    
+    # Adjust layout
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.3)  # Make space for the legend at the bottom
+    
+    # Display the plot
+    plt.show()
 
+def interactive_search(file_path, id_column='Object_ID', chi2_column='Chi2'):
+    """
+    Create an interactive search interface for finding stars in the dataset.
 
-def main():
-    """Main function to parse arguments and run the analyzer."""
-    parser = argparse.ArgumentParser(
-        description='Star Histogram Analyzer: Interactive visualization of star properties with chi-squared weighting.'
+    Parameters:
+    file_path: Path to the Excel file
+    id_column: Name of the column containing star IDs (default 'Object_ID')
+    chi2_column: Name of the column containing Chi2 values (default 'Chi2')
+    """
+    # Load the dataset
+    df = load_dataset(file_path, id_column=id_column, chi2_column=chi2_column)
+    if df is None:
+        return
+    
+    # Create an input box for the Object_ID
+    object_id_input = widgets.Text(
+        value='',  # Start with an empty string
+        description='Object_ID:',
+        placeholder='Enter Object_ID',
+        style={'description_width': 'initial'}
     )
-    
-    parser.add_argument('data_file', help='Path to Excel file containing star data')
-    parser.add_argument('--id-column', default='ID', help='Name of the column containing star IDs (default: ID)')
-    parser.add_argument('--chi2-column', default='Chi2', help='Name of the column containing chi-squared values (default: Chi2)')
-    parser.add_argument('--parameters', nargs='+', default=['logg', 'Teff_K', 'Lbol_Lsun'], 
-                        help='Parameters to create histograms for (default: logg Teff_K Lbol_Lsun)')
-    parser.add_argument('--bins', type=int, default=20, help='Number of bins for histograms (default: 20)')
-    
-    args = parser.parse_args()
-    
-    # Check if the file exists
-    if not os.path.isfile(args.data_file):
-        print(f"Error: File '{args.data_file}' not found.")
-        sys.exit(1)
-    
-    # Create the analyzer and visualize data
-    analyzer = StarHistogramAnalyzer(args.data_file, args.id_column, args.chi2_column)
-    analyzer.visualize_parameters(args.parameters, args.bins)
 
+    # Create a query input box
+    query_input = widgets.Text(
+        value='',
+        description='Query:',
+        placeholder='Enter query (e.g., logg=5, logg>3, Teff_K<6000)',
+        style={'description_width': 'initial'}
+    )
+
+    # Create buttons for actions
+    run_query_button = widgets.Button(
+        description="Run Query",
+        button_style='info',
+        tooltip='Click to execute the query',
+        icon='search'
+    )
+
+    find_star_button = widgets.Button(
+        description="Find Star",
+        button_style='success',
+        tooltip='Click to find star by Object_ID',
+        icon='star'
+    )
+
+    # Define the update function for Object_ID search
+    def update_plot(change=None):
+        clear_output(wait=True)  # Clear previous output
+        
+        # Generate all histograms initially without highlighting any star
+        for param in ['logg', 'Teff_K', 'Lbol_Lsun']:
+            if param in df.columns:
+                create_chi2_weighted_histogram(df, param, chi2_name=chi2_column, id_column=id_column)
+
+        # Re-display the widgets
+        display(widgets.HBox([object_id_input, query_input, run_query_button, find_star_button]))
+
+    # Define the query execution function
+    def run_query(button_click=None):
+        query = query_input.value.strip()
+        if query:
+            filter_stars_by_query(df, query)  # Export matching Object_IDs to a text file
+        else:
+            print("Please enter a valid query.")
+
+    # Define the find star function
+    def find_star(button_click=None):
+        object_id = object_id_input.value.strip()
+        if object_id:
+            # Update the plot with the new Object_ID
+            for param in ['logg', 'Teff_K', 'Lbol_Lsun']:
+                if param in df.columns:
+                    create_chi2_weighted_histogram(df, param, chi2_name=chi2_column, object_id=object_id, id_column=id_column)
+        else:
+            print("Please enter a valid Object_ID.")
+
+    # Link the "Run Query" button to the query execution function
+    run_query_button.on_click(run_query)
+
+    # Link the "Find Star" button to the find star function
+    find_star_button.on_click(find_star)
+
+    # Initial plots (no star highlighted)
+    display(widgets.HBox([object_id_input, query_input, run_query_button, find_star_button]))
+    for param in ['logg', 'Teff_K', 'Lbol_Lsun']:
+        if param in df.columns:
+            create_chi2_weighted_histogram(df, param, chi2_name=chi2_column, id_column=id_column)
 
 if __name__ == "__main__":
-    main()
+    # Prompt the user for the file path
+    file_path = input("Enter the path to your Excel file: ").strip()
+    if not file_path:
+        print("Error: File path cannot be empty.")
+    else:
+        interactive_search(file_path)
