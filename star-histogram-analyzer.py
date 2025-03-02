@@ -152,11 +152,18 @@ def create_chi2_weighted_histogram(df, param_name, chi2_name='Chi2', bins=20, ob
     param_values = df[param_name]
     chi2_values = df[chi2_name]
     
-    # Create a figure and axis explicitly
-    fig, ax = plt.subplots(figsize=(12, 6))
+    # Define custom bin edges for Lbol and Teff_K
+    if param_name == 'Lbol_Lsun':  # Logarithmic scale for Lbol
+        min_val = np.min(param_values[param_values > 0])  # Avoid log(0)
+        max_val = np.max(param_values)
+        bin_edges = np.logspace(np.log10(min_val), np.log10(max_val), bins + 1)
+    elif param_name == 'Teff_K':  # Finer bins for Teff_K below 10,000
+        lower_bins = np.linspace(0, 10000, int(bins * 0.8))  # 80% of bins for values <= 10,000
+        upper_bins = np.linspace(10000, np.max(param_values), int(bins * 0.2) + 1)  # 20% for values > 10,000
+        bin_edges = np.concatenate([lower_bins, upper_bins[1:]])
+    else:  # Default linear bins for other parameters
+        bin_edges = np.linspace(np.min(param_values), np.max(param_values), bins + 1)
     
-    # Create bins for the histogram
-    bin_edges = np.linspace(min(param_values), max(param_values), bins + 1)
     hist, _ = np.histogram(param_values, bins=bin_edges)
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
     
@@ -174,11 +181,14 @@ def create_chi2_weighted_histogram(df, param_name, chi2_name='Chi2', bins=20, ob
     colors = ["darkblue", "royalblue", "lightblue", "lightyellow", "orange", "red", "darkred"]
     cmap = mcolors.LinearSegmentedColormap.from_list('high_contrast', colors)
     
+    # Create the figure and axis explicitly
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
     # Plot the histogram with colors based on chi2 values
     for i in range(len(bin_centers)):
         norm_value = (chi2_per_bin[i] - min_chi2) / (max_chi2 - min_chi2) if max_chi2 > min_chi2 else 0.5
         ax.bar(
-            bin_centers[i], hist[i], width=(bin_edges[1]-bin_edges[0]), 
+            bin_centers[i], hist[i], width=(bin_edges[i+1]-bin_edges[i]), 
             color=cmap(norm_value), alpha=0.8, edgecolor='black', linewidth=0.5
         )
     
@@ -192,7 +202,7 @@ def create_chi2_weighted_histogram(df, param_name, chi2_name='Chi2', bins=20, ob
             for i in range(len(bin_edges) - 1):
                 if bin_edges[i] <= star_param_value < bin_edges[i+1]:
                     ax.bar(
-                        bin_centers[i], hist[i], width=(bin_edges[1]-bin_edges[0]), 
+                        bin_centers[i], hist[i], width=(bin_edges[i+1]-bin_edges[i]), 
                         color='red', alpha=0.7, edgecolor='black', linewidth=1.5, hatch='/',
                         label=f"Star Bin ({object_id})"
                     )
@@ -221,6 +231,13 @@ def create_chi2_weighted_histogram(df, param_name, chi2_name='Chi2', bins=20, ob
     ax.set_ylabel('Frequency')
     ax.set_title(f'Histogram of {param_name} values colored by {chi2_name}')
     ax.grid(alpha=0.3)
+    
+    # Adjust x-axis scale for Lbol and Teff_K
+    if param_name == 'Lbol_Lsun':  # Logarithmic scale for Lbol
+        ax.set_xscale('log')
+        ax.set_xlabel(f"{param_name} (Log Scale)")
+    elif param_name == 'Teff_K':  # Linear scale with finer bins for Teff_K
+        ax.set_xlim(0, np.max(param_values))  # Ensure the x-axis spans the full range
     
     # Calculate and display statistics
     mean_param = np.mean(param_values)
