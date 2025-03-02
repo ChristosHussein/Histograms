@@ -207,7 +207,7 @@ def create_chi2_weighted_histogram(df, param_name, chi2_name='Chi2', bins=20, ob
                     )
                     
                     # Place the legend at the bottom with only star info
-                    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), fontsize=10, frameon=True, shadow=True, title=star_info)
+                    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.25), fontsize=10, frameon=True, shadow=True, title=star_info)
                     break
     
     # Add a colorbar
@@ -222,9 +222,39 @@ def create_chi2_weighted_histogram(df, param_name, chi2_name='Chi2', bins=20, ob
     ax.set_title(f'Histogram of {param_name} values colored by {chi2_name}')
     ax.grid(alpha=0.3)
     
-    # Adjust layout
+    # Calculate and display statistics
+    mean_param = np.mean(param_values)
+    median_param = np.median(param_values)
+    std_param = np.std(param_values)
+    min_param = np.min(param_values)
+    max_param = np.max(param_values)
+    
+    mean_chi2 = np.mean(chi2_values)
+    median_chi2 = np.median(chi2_values)
+    min_chi2_val = np.min(chi2_values)
+    max_chi2_val = np.max(chi2_values)
+    
+    # Create statistics text
+    stats_text = (
+        f"{param_name} Statistics:\n"
+        f"Mean: {mean_param:.4g}\n"
+        f"Median: {median_param:.4g}\n"
+        f"Min: {min_param:.4g}\n"
+        f"Max: {max_param:.4g}\n"
+        f"Std Dev: {std_param:.4g}\n\n"
+        f"{chi2_name} Statistics:\n"
+        f"Mean: {mean_chi2:.4g}\n"
+        f"Median: {median_chi2:.4g}\n"
+        f"Min: {min_chi2_val:.4g}\n"
+        f"Max: {max_chi2_val:.4g}"
+    )
+    
+    # Add statistics textbox at the bottom
+    plt.figtext(0.02, -0.15, stats_text, fontsize=9, bbox=dict(facecolor='white', alpha=0.8, boxstyle='round,pad=0.5'))
+    
+    # Adjust layout to make space for the legend and statistics
     plt.tight_layout()
-    plt.subplots_adjust(bottom=0.3)  # Make space for the legend at the bottom
+    plt.subplots_adjust(bottom=0.4)  # Increase bottom margin for statistics and legend
     
     # Display the plot
     plt.show()
