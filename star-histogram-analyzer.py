@@ -22,9 +22,9 @@ def load_dataset(file_path, id_column='Object_ID', chi2_column='Chi2'):
     try:
         df = pd.read_excel(file_path)  # Load the Excel file
         
-        # Clean the ID column: Convert to string to handle large integers precisely
+        # Clean the ID column: Convert to string to handle any format (numeric or alphanumeric)
         if id_column in df.columns:
-            df[id_column] = df[id_column].astype(str)
+            df[id_column] = df[id_column].astype(str)  # Treat Object_ID as a string
         
         print("File loaded successfully.")
         return df
@@ -98,11 +98,11 @@ def filter_stars_by_query(df, query):
             print(f"Error: Column '{column.strip()}' not found in the dataset.")
             return
         
-        # Convert value to numeric if possible
+        # Convert value to numeric if possible (only for queries, not Object_ID)
         try:
             value = float(value.strip())
         except ValueError:
-            print(f"Error: Invalid value '{value}' in query.")
+            print(f"Error: Invalid value '{value}' in query. Queries must involve numeric comparisons.")
             return
         
         # Apply the query
@@ -247,7 +247,7 @@ def interactive_search(file_path, id_column='Object_ID', chi2_column='Chi2'):
     object_id_input = widgets.Text(
         value='',  # Start with an empty string
         description='Object_ID:',
-        placeholder='Enter Object_ID',
+        placeholder='Enter Object_ID (e.g., AFGFSD1223453)',
         style={'description_width': 'initial'}
     )
 
