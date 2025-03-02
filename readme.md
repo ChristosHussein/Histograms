@@ -4,13 +4,30 @@ An interactive tool for visualizing astrophysical data with Chi-squared weighted
 
 ![example-visualization](example.png)
 
-## Features
 
-- Create interactive histograms of star properties colored by Chi-squared values
-- Search for specific stars by ID and highlight their position in the distribution
-- View detailed statistics about each parameter and Chi-squared distribution
-- Interactive search functionality to locate specific stars within the histograms
-- Automatic percentile calculation to see where stars fall in the distribution
+## Overview
+This project analyzes star data using Python and generates interactive histograms. It allows users to search for stars by `Object_ID` and filter stars based on specific queries.
+
+## Features
+- Interactive histograms for parameters such as `logg`, `Teff_K`, and `Lbol_Lsun`.
+- Search for stars by `Object_ID` and highlight their bins with a dashed vertical line connecting to the legend at the bottom.
+- Export lists of stars matching specific queries (e.g., `teff>10`) to text files.
+- Two buttons for distinct operations:
+  - "Find Star": Highlights the bin of a star based on its `Object_ID` and displays its information in the legend.
+  - "Run Query": Filters stars based on a condition and exports results to a text file.
+
+## Requirements
+- Python 3.x
+- Required libraries:
+  - pandas
+  - matplotlib
+  - numpy
+  - openpyxl
+  - ipywidgets
+
+Install dependencies using:
+```bash
+pip install -r requirements.txt
 
 ## Requirements
 
