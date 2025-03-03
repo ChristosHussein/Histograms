@@ -11,7 +11,7 @@ This project analyzes star data using Python and generates interactive histogram
 ## Features
 - Interactive histograms for parameters such as `logg`, `Teff_K`, and `Lbol_Lsun`.
 - Search for stars by `Object_ID` and highlight their bins with a dashed vertical line connecting to the legend at the bottom.
-- Export lists of stars matching specific queries (e.g., `teff>10`) to text files.
+- Export lists of stars matching specific queries (e.g., `Teff_K>10`) to text files.
 - Two buttons for distinct operations:
   - "Find Star": Highlights the bin of a star based on its `Object_ID` and displays its information in the legend.
   - "Run Query": Filters stars based on a condition and exports results to a text file.
