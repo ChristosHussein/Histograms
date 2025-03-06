@@ -491,7 +491,7 @@ def interactive_search(data_path, id_column='Object_ID', weight_columns=['Vgfb',
     )
     
     reset_button = widgets.Button(
-        description="Reset Filters", 
+        description="Reset", 
         button_style='danger', 
         tooltip='Click to reset all filters and show full dataset', 
         icon='refresh'
